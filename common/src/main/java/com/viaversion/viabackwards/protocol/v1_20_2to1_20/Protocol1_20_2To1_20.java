@@ -26,6 +26,9 @@ import com.viaversion.viabackwards.protocol.v1_20_2to1_20.rewriter.BlockRewriter
 import com.viaversion.viabackwards.protocol.v1_20_2to1_20.rewriter.EntityPacketRewriter1_20_2;
 import com.viaversion.viabackwards.protocol.v1_20_2to1_20.storage.ConfigurationPacketStorage;
 import com.viaversion.viaversion.api.connection.UserConnection;
+import com.viaversion.viaversion.api.data.FullMappings;
+import com.viaversion.viaversion.api.minecraft.Holder;
+import com.viaversion.viaversion.api.minecraft.SoundEvent;
 import com.viaversion.viaversion.api.minecraft.entities.EntityTypes1_19_4;
 import com.viaversion.viaversion.api.platform.providers.ViaProviders;
 import com.viaversion.viaversion.api.protocol.packet.Direction;
@@ -65,6 +68,12 @@ public final class Protocol1_20_2To1_20 extends BackwardsProtocol<ClientboundPac
     @Override
     protected void registerPackets() {
         super.registerPackets();
+
+        // block.sponge.* / block.wet_sponge.* were added in 1.20.2; 1.20.1 has no such sound, so the default
+        // handler maps them to -1 and drops them - silent for every downlevel client. Substitute the pre-1.20.2
+        // sponge sound (grass) so placement stays audible.
+        replaceClientbound(ClientboundPackets1_20_2.SOUND, this::rewriteSound);
+        replaceClientbound(ClientboundPackets1_20_2.SOUND_ENTITY, this::rewriteSound);
 
         registerClientbound(ClientboundPackets1_20_2.SET_DISPLAY_OBJECTIVE, wrapper -> {
             final int slot = wrapper.read(Types.VAR_INT);
@@ -158,6 +167,35 @@ public final class Protocol1_20_2To1_20 extends BackwardsProtocol<ClientboundPac
             wrapper.user().get(ConfigurationPacketStorage.class).addRawPacket(wrapper, ClientboundPackets1_19_4.CUSTOM_PAYLOAD);
             wrapper.cancel();
         });
+    }
+
+    private void rewriteSound(final PacketWrapper wrapper) {
+        final Holder<SoundEvent> holder = wrapper.read(Types.SOUND_EVENT);
+        if (holder.isDirect()) { // inline/custom sound, no registry id to remap
+            wrapper.write(Types.SOUND_EVENT, holder);
+            return;
+        }
+        int mappedId = getMappingData().getSoundMappings().getNewId(holder.id());
+        if (mappedId == -1) {
+            // The sound doesn't exist in 1.20.1; if it's a sponge sound, fall back to the grass sound it used pre-1.20.2.
+            final FullMappings full = getMappingData().getFullSoundMappings();
+            final String grass = spongeToGrass(full != null ? full.identifier(holder.id()) : null);
+            if (grass != null) {
+                mappedId = full.mappedId(grass);
+            }
+        }
+        if (mappedId == -1) {
+            wrapper.cancel();
+            return;
+        }
+        wrapper.write(Types.SOUND_EVENT, mappedId == holder.id() ? holder : Holder.of(mappedId));
+    }
+
+    private static String spongeToGrass(final String identifier) {
+        if (identifier == null) return null;
+        if (identifier.contains("block.sponge.")) return identifier.replace("block.sponge.", "block.grass.");
+        if (identifier.contains("block.wet_sponge.")) return identifier.replace("block.wet_sponge.", "block.grass.");
+        return null;
     }
 
     @Override
