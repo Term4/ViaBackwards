@@ -27,9 +27,13 @@ import com.viaversion.viabackwards.protocol.v26_2to26_1.rewriter.BlockItemPacket
 import com.viaversion.viabackwards.protocol.v26_2to26_1.rewriter.ComponentRewriter26_2;
 import com.viaversion.viabackwards.protocol.v26_2to26_1.rewriter.EntityPacketRewriter26_2;
 import com.viaversion.viaversion.api.connection.UserConnection;
+import com.viaversion.viaversion.api.data.FullMappings;
+import com.viaversion.viaversion.api.minecraft.Holder;
+import com.viaversion.viaversion.api.minecraft.SoundEvent;
 import com.viaversion.viaversion.api.minecraft.data.version.StructuredDataKeys1_21_11;
 import com.viaversion.viaversion.api.minecraft.data.version.StructuredDataKeys26_2;
 import com.viaversion.viaversion.api.minecraft.entitydata.types.EntityDataTypes26_1;
+import com.viaversion.viaversion.api.protocol.packet.PacketWrapper;
 import com.viaversion.viaversion.api.protocol.packet.State;
 import com.viaversion.viaversion.api.protocol.packet.provider.PacketTypesProvider;
 import com.viaversion.viaversion.api.protocol.packet.provider.SimplePacketTypesProvider;
@@ -92,6 +96,12 @@ public final class Protocol26_2To26_1 extends BackwardsProtocol<ClientboundPacke
     @Override
     protected void registerPackets() {
         super.registerPackets();
+
+        // The default sound handler drops some 26.2 sounds whose id the fresh 26.2->26.1 table wrongly maps to
+        // -1 even though they exist in 26.1 under the same name (e.g. block.sponge.*). Replace it to recover them.
+        replaceClientbound(ClientboundPackets26_1.SOUND, this::rewriteSound);
+        replaceClientbound(ClientboundPackets26_1.SOUND_ENTITY, this::rewriteSound);
+
         replaceClientbound(ClientboundPackets26_1.SET_PLAYER_TEAM, wrapper -> {
             wrapper.passthrough(Types.STRING); // Team Name
             final byte action = wrapper.passthrough(Types.BYTE); // Mode
@@ -125,6 +135,30 @@ public final class Protocol26_2To26_1 extends BackwardsProtocol<ClientboundPacke
         });
 
         registryDataRewriter.remove("sulfur_cube_archetype");
+    }
+
+    private void rewriteSound(final PacketWrapper wrapper) {
+        final Holder<SoundEvent> holder = wrapper.read(Types.SOUND_EVENT);
+        if (holder.isDirect()) { // inline/custom sound, no registry id to remap
+            wrapper.write(Types.SOUND_EVENT, holder);
+            return;
+        }
+        // Same remap as the default handler (so working sounds are unaffected), but recover the ones it drops:
+        // the fresh 26.2->26.1 id table maps a few ids to -1 that DO exist in 26.1 under the same name
+        // (e.g. block.sponge.*). Recover those by identifier so they're not silenced.
+        int mappedId = getMappingData().getSoundMappings().getNewId(holder.id());
+        if (mappedId == -1) {
+            final FullMappings full = getMappingData().getFullSoundMappings();
+            final String identifier = full != null ? full.identifier(holder.id()) : null;
+            if (identifier != null) {
+                mappedId = full.mappedId(identifier);
+            }
+        }
+        if (mappedId == -1) {
+            wrapper.cancel();
+            return;
+        }
+        wrapper.write(Types.SOUND_EVENT, mappedId == holder.id() ? holder : Holder.of(mappedId));
     }
 
     @Override
