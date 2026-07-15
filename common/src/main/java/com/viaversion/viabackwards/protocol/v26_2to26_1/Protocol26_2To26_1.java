@@ -143,11 +143,9 @@ public final class Protocol26_2To26_1 extends BackwardsProtocol<ClientboundPacke
             wrapper.write(Types.SOUND_EVENT, holder);
             return;
         }
-        // Same remap as the default handler (so working sounds are unaffected), but recover the ones it drops:
-        // the fresh 26.2->26.1 id table maps a few ids to -1 that DO exist in 26.1 under the same name
-        // (e.g. block.sponge.*). Recover those by identifier so they're not silenced.
         int mappedId = getMappingData().getSoundMappings().getNewId(holder.id());
         if (mappedId == -1) {
+            // Recover by identifier - these ids do exist in 26.1 under the same name
             final FullMappings full = getMappingData().getFullSoundMappings();
             final String identifier = full != null ? full.identifier(holder.id()) : null;
             if (identifier != null) {

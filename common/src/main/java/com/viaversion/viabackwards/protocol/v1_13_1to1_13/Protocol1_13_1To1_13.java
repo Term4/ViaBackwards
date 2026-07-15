@@ -135,12 +135,10 @@ public class Protocol1_13_1To1_13 extends BackwardsProtocol<ClientboundPackets1_
                 return;
             }
 
-            // 1.17.1+ servers skip the hotbar slot resync after a drop action, assuming the client predicted
-            // it (ServerPlayer#drop marks the remote slot as already known) - clients only predict drops since
-            // 1.13.1, so on older clients the dropped stack ghosts in the hotbar. Replay the drop as the
-            // equivalent throw-click instead: the click path does get resynced. Clients only send drop actions
-            // with no screen open; if the server still has one open, the click would miss - leave the vanilla
-            // action alone there, as on older servers, which resync drops themselves.
+            // 1.17.1+ servers don't resync the hotbar slot after a drop action (assumed client-predicted, but
+            // clients only predict drops since 1.13.1), leaving a ghost stack. Replay the drop as a throw-click,
+            // which does get resynced. Left alone on older servers (they resync) and while the server has a
+            // screen open (the window 0 click would miss)
             final boolean suppressingServer = wrapper.user().getProtocolInfo().serverProtocolVersion()
                 .newerThanOrEqualTo(ProtocolVersion.v1_17_1);
             final PlayerInventoryState state = wrapper.user().get(PlayerInventoryState.class);
