@@ -63,6 +63,38 @@ public class Protocol1_9_1To1_9 extends BackwardsProtocol<ClientboundPackets1_9,
             }
         });
 
+        registerClientbound(ClientboundPackets1_9.UPDATE_ATTRIBUTES, wrapper -> {
+            wrapper.passthrough(Types.VAR_INT); // Entity ID
+            int size = wrapper.passthrough(Types.INT);
+            int newSize = size;
+            for (int i = 0; i < size; i++) {
+                String key = wrapper.read(Types.STRING);
+                if (key.equals("generic.armorToughness")) { // Added in 1.9.1
+                    newSize--;
+                    wrapper.read(Types.DOUBLE);
+                    int modifierSize = wrapper.read(Types.VAR_INT);
+                    for (int j = 0; j < modifierSize; j++) {
+                        wrapper.read(Types.UUID);
+                        wrapper.read(Types.DOUBLE);
+                        wrapper.read(Types.BYTE);
+                    }
+                } else {
+                    wrapper.write(Types.STRING, key);
+                    wrapper.passthrough(Types.DOUBLE);
+                    int modifierSize = wrapper.passthrough(Types.VAR_INT);
+                    for (int j = 0; j < modifierSize; j++) {
+                        wrapper.passthrough(Types.UUID);
+                        wrapper.passthrough(Types.DOUBLE);
+                        wrapper.passthrough(Types.BYTE);
+                    }
+                }
+            }
+
+            if (newSize != size) {
+                wrapper.set(Types.INT, 0, newSize);
+            }
+        });
+
         JsonNBTComponentRewriter<ClientboundPackets1_9> componentRewriter = new JsonNBTComponentRewriter<>(this, ComponentRewriterBase.ReadType.JSON);
         componentRewriter.registerComponentPacket(ClientboundPackets1_9.CHAT);
     }
