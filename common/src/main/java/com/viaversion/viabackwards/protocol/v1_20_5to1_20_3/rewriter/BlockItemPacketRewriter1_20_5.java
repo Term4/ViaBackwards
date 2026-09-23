@@ -347,8 +347,7 @@ public final class BlockItemPacketRewriter1_20_5 extends BackwardsFullStructured
         // Just pass it on without deeper handling, only leaving custom data with the stored hashes.
         final CompoundTag hashes = tag.getCompoundTag(ORIGINAL_HASHES_KEY);
         if (hashes == null) {
-            // Not valid
-            item.setTag(null);
+            // Items without data have no stored hashes, but the tag may still hold an original id
             return null;
         }
 

@@ -251,7 +251,8 @@ public final class BlockItemPacketRewriter1_21_5 extends BackwardsStructuredItem
 
     @Override
     protected void storeOriginalHashedItemIfNeeded(final UserConnection connection, final Item item, final ItemHasherBase hasher, final HashedItem originalHashedItem) {
-        if (originalHashedItem == null) {
+        if (originalHashedItem == null || (originalHashedItem.dataHashesById().isEmpty() && originalHashedItem.removedDataIds().isEmpty())) {
+            // An item without data hashes to just its id and amount, so there is nothing to back up
             return;
         }
 
@@ -281,8 +282,8 @@ public final class BlockItemPacketRewriter1_21_5 extends BackwardsStructuredItem
         if (originalHash != null) {
             wrapper.write(Types.HASHED_ITEM, originalHash);
         } else {
-            // Not valid
-            item.dataContainer().data().clear();
+            // Items without data have no backup, but their custom data may still hold an original id
+            item.dataContainer().data().keySet().removeIf(key -> key != StructuredDataKey.CUSTOM_DATA);
             final Item serverItem = handleItemToServer(wrapper.user(), item);
             wrapper.write(Types.HASHED_ITEM, new HashedStructuredItem(serverItem.identifier(), serverItem.amount()));
         }
