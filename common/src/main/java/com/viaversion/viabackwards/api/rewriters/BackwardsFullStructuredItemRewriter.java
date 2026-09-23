@@ -49,13 +49,11 @@ public class BackwardsFullStructuredItemRewriter<C extends ClientboundPacketType
             // We don't actually need anything but the amount, id, and hashes.
             // Just pass it on without deeper handling, only leaving custom data.
             final CompoundTag customData = item.dataContainer().get(StructuredDataKey.CUSTOM_DATA);
-            if (customData == null) {
-                // Not valid
-                item.dataContainer().data().clear();
-            } else {
+            if (customData != null && customData.contains(ORIGINAL_HASHES_KEY)) {
                 customData.keySet().removeIf(key -> !key.equals(ORIGINAL_HASHES_KEY));
-                item.dataContainer().data().keySet().removeIf(key -> key != StructuredDataKey.CUSTOM_DATA);
             }
+            // Items without data have no stored hashes, but their custom data may still hold an original id
+            item.dataContainer().data().keySet().removeIf(key -> key != StructuredDataKey.CUSTOM_DATA);
         }
 
         return super.handleItemToServer(connection, item);
